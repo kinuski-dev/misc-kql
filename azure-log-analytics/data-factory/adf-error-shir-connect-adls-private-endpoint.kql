@@ -1,0 +1,56 @@
+//=============================================================================
+// The KQL finds critical "SHIR does not connect to Storage Account's Private
+// Endpoint" code 2200 errors in Log Analytics
+//
+// The error likely means that the Self-Hosted Integration Runtime (SHIR)
+// fails to connect to the Storage Account; that's routing/DNS/firewall problem
+//
+// kinuski-dev / v.1.0.0 / 2024-01-09
+//
+// Notes:
+// - Unions ADF Activities (triggered runs) and ADF Sandbox Activities (debug)
+// - Uses excessive ErrorMessage filtering since the variety of errors is
+//   unknown
+// - Excludes IfCondition and ForEach to reduce noise
+// - Strips Storage Account name and IP address out of the error message
+// - When used as an Alert Rule - remove ORDER BY
+//=============================================================================
+let varFilterAgo = 60m; // select last 60 minutes
+ADFActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2200
+    and ActivityType !in ("IfCondition", "ForEach")
+    and EffectiveIntegrationRuntime has "my-shir-name"
+    and ErrorMessage has "ErrorCode=AdlsGen2OperationFailed"
+    and ErrorMessage has "Type=Microsoft.DataTransfer.Common.Shared.HybridDeliveryException"
+    and ErrorMessage has "A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond"
+    and TimeGenerated > ago(varFilterAgo)
+| union
+ADFSandboxActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2200
+    and ActivityType !in ("IfCondition", "ForEach")
+    and EffectiveIntegrationRuntime has "my-shir-name"
+    and ErrorMessage has "ErrorCode=AdlsGen2OperationFailed"
+    and ErrorMessage has "Type=Microsoft.DataTransfer.Common.Shared.HybridDeliveryException"
+    and ErrorMessage has "A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond"
+    and TimeGenerated > ago(varFilterAgo)
+| project
+    AdfName = substring(tostring(split(ResourceId, "/", 8)), 2, strlen(tostring(split(ResourceId, "/", 8))) - 4),
+    TimeGenerated,
+    PipelineName,
+    ActivityName,
+    Status,
+    ErrorCode,
+    EffectiveIntegrationRuntime,
+    StorageAccount = replace_string(tostring(split(split(ErrorMessage, "Account: ", 1)[0], ".",0)[0]), "'", ""),
+    StorageAccountPrivateEndpointIpAddress = tostring(split(split(ErrorMessage, "because connected host has failed to respond", 1)[0], ",", 0)[0]),
+    ErrorMessage,
+    Start,
+    End,
+    Duration,
+    CorrelationId,
+    ResourceId
+| order by TimeGenerated desc

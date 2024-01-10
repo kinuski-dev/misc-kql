@@ -1,0 +1,7 @@
+{
+    "errorCode": "2200",
+    "message": "ErrorCode=AdlsGen2OperationFailed,'Type=Microsoft.DataTransfer.Common.Shared.HybridDeliveryException,Message=ADLS Gen2 operation failed for: An error occurred while sending the request.. Account: 'mystorageaccount'. FileSystem: 'mycontainer'. Path: 'myfolder/mysubfolder/myfile'..,Source=Microsoft.DataTransfer.ClientLibrary,''Type=System.Net.Http.HttpRequestException,Message=An error occurred while sending the request.,Source=mscorlib,''Type=System.Net.WebException,Message=Unable to connect to the remote server,Source=System,''Type=System.Net.Sockets.SocketException,Message=A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond 10.0.0.10:443,Source=System,'",
+    "failureType": "UserError",
+    "target": "copy_files",
+    "details": []
+}
