@@ -1,0 +1,93 @@
+//=============================================================================
+// The KQL finds critical SHIR errors in Log Analytics
+//
+// Supported errors:
+// - "SHIR offline" code 2010 ADF Activity Error Alerts (SHIR VM is down or
+//   ADF cannot connect to te SHIR)
+// - "SHIR cannot connect to Storage Account's Private Endpoint" code 2200
+//   ADF Activity Error Alerts (SHIR fails to connect to ADLS; that's routing/
+//   DNS/firewall problem)
+//
+// kinuski-dev / v.1.0.0 / 2024-01-09
+//
+// Notes:
+// - Unions ADF Activities (triggered runs) and ADF Sandbox Activities (debug)
+// - Unions two error-specific queries - it's easier to join queries
+//   than to maintain a complex WHERE clause
+// - Excludes IfCondition and ForEach to reduce noise
+// - Strips Storage Account name and IP address out of the error message
+// - When used as an Alert Rule - remove ORDER BY
+//=============================================================================
+let varFilterAgo = 60m; // select last 60 minutes
+let errorsConnectivity =
+ADFActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2200
+    and ActivityType !in ("IfCondition", "ForEach")
+    and EffectiveIntegrationRuntime has "my-shir-name"
+    and ErrorMessage has "ErrorCode=AdlsGen2OperationFailed"
+    and ErrorMessage has "Type=Microsoft.DataTransfer.Common.Shared.HybridDeliveryException"
+    and ErrorMessage has "A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond"
+    and TimeGenerated > ago(varFilterAgo)
+| union
+ADFSandboxActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2200
+    and ActivityType !in ("IfCondition", "ForEach")
+    and EffectiveIntegrationRuntime has "my-shir-name"
+    and ErrorMessage has "ErrorCode=AdlsGen2OperationFailed"
+    and ErrorMessage has "Type=Microsoft.DataTransfer.Common.Shared.HybridDeliveryException"
+    and ErrorMessage has "A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond"
+    and TimeGenerated > ago(varFilterAgo)
+| project
+    AdfName = substring(tostring(split(ResourceId, "/", 8)), 2, strlen(tostring(split(ResourceId, "/", 8))) - 4),
+    TimeGenerated,
+    PipelineName,
+    ActivityName,
+    Status,
+    ErrorCode,
+    ShirName = "n/a",
+    EffectiveIntegrationRuntime,
+    StorageAccount = replace_string(tostring(split(split(ErrorMessage, "Account: ", 1)[0], ".",0)[0]), "'", ""),
+    StorageAccountPrivateEndpointIpAddress = tostring(split(split(ErrorMessage, "because connected host has failed to respond", 1)[0], ",", 0)[0]),
+    ErrorMessage,
+    Start,
+    End,
+    Duration,
+    CorrelationId,
+    ResourceId;
+let errorOffline =
+ADFActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2010
+    and ActivityType !in ("IfCondition", "ForEach")
+    and TimeGenerated > ago(varFilterAgo)
+| union ADFSandboxActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2010
+    and ActivityType !in ("IfCondition", "ForEach")
+    and TimeGenerated > ago(varFilterAgo)
+| project
+    AdfName = substring(tostring(split(ResourceId, "/", 8)), 2, strlen(tostring(split(ResourceId, "/", 8))) - 4),
+    TimeGenerated,
+    PipelineName,
+    ActivityName,
+    Status,
+    ErrorCode,
+    ShirName = tostring(split(ErrorMessage, "'", 1)[0]),
+    EffectiveIntegrationRuntime,
+    StorageAccount = "n/a",
+    StorageAccountPrivateEndpointIpAddress = "n/a",
+    ErrorMessage,
+    Start,
+    End,
+    Duration,
+    CorrelationId,
+    ResourceId;
+errorsConnectivity
+| union errorOffline
+| order by TimeGenerated desc

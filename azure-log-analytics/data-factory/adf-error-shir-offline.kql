@@ -1,0 +1,43 @@
+//=============================================================================
+// The KQL finds critical "SHIR offline" code 2010 errors in Log Analytics
+//
+// The error likely means that the Self-Hosted Integration Runtime (SHIR) VM
+// is offline or cannot be contacted
+//
+// kinuski-dev / v.1.0.0 / 2023-09-01
+//
+// Notes:
+// - Unions ADF Activities (triggered runs) and ADF Sandbox Activities (debug)
+// - Excludes IfCondition and ForEach to reduce noise
+// - Strips SHIR name out of the error message
+// - When used as an Alert Rule - remove ORDER BY
+//=============================================================================
+let varFilterAgo = 60m; // select last 60 minutes
+ADFActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2010
+    and ActivityType !in ("IfCondition", "ForEach")
+    and TimeGenerated > ago(varFilterAgo)
+| union ADFSandboxActivityRun
+| extend Duration = (End - Start)
+| where Status == "Failed"
+    and ErrorCode == 2010
+    and ActivityType !in ("IfCondition", "ForEach")
+    and TimeGenerated > ago(varFilterAgo)
+| project
+    AdfName = substring(tostring(split(ResourceId, "/", 8)), 2, strlen(tostring(split(ResourceId, "/", 8))) - 4),
+    TimeGenerated,
+    PipelineName,
+    ActivityName,
+    Status,
+    ErrorCode,
+    ShirName = tostring(split(ErrorMessage, "'", 1)[0]),
+    EffectiveIntegrationRuntime,
+    ErrorMessage,
+    Start,
+    End,
+    Duration,
+    CorrelationId,
+    ResourceId
+| order by TimeGenerated desc
