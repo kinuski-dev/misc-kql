@@ -1,0 +1,41 @@
+//=============================================================================
+// The KQL selects Logic App Errors
+//
+// Alex Osipov / v.1.0.0 / 2024-01-11
+//
+// Notes:
+// - When used as an Alert Rule - remove ORDER BY
+//=============================================================================
+let varFilterAgo = 30d; // select last 30 days
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.LOGIC"
+    and Category == "WorkflowRuntime"
+    and OperationName == "Microsoft.Logic/workflows/workflowRunCompleted"
+    and Level == "Error"
+    and status_s == "Failed"
+    and resource_workflowName_s == "my-logic-app-name" // Logic App name
+    and TimeGenerated > ago(varFilterAgo)
+| project
+    LogicAppName = resource_workflowName_s,
+    ResourceGroup = tolower(ResourceGroup),
+    TimeGenerated,
+    ResourceProvider = toupper(ResourceProvider),
+    Category,
+    RunsHistoryId = Resource,
+    OperationName,
+    Level,
+    Status = status_s,
+    StartTime = startTime_t,
+    EndTime = endTime_t,
+    Duration = (endTime_t - startTime_t),
+    ErrorCode = error_code_s,
+    ErrorMessage = error_message_s,
+    SubscriptionId,
+    SubscriptionName = case(SubscriptionId == "00000000-0000-0000-0000-000000000000",
+                            "Azure-Subscription-0",
+                            case(SubscriptionId == "11111111-1111-1111-1111-111111111111",
+                                "Azure-Subscription-1", "n/a")
+    ),
+    TagOwner = tags_owner_s,
+    ResourceId
+| order by TimeGenerated desc

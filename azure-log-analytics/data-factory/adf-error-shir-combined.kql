@@ -8,7 +8,7 @@
 //   ADF Activity Error Alerts (SHIR fails to connect to ADLS; that's routing/
 //   DNS/firewall problem)
 //
-// kinuski-dev / v.1.0.0 / 2024-01-09
+// Alex Osipov / v.1.0.1 / 2024-01-11
 //
 // Notes:
 // - Unions ADF Activities (triggered runs) and ADF Sandbox Activities (debug)
@@ -18,7 +18,7 @@
 // - Strips Storage Account name and IP address out of the error message
 // - When used as an Alert Rule - remove ORDER BY
 //=============================================================================
-let varFilterAgo = 60m; // select last 60 minutes
+let varFilterAgo = 30d; // select last 30 days
 let errorsConnectivity =
 ADFActivityRun
 | extend Duration = (End - Start)
