@@ -5,6 +5,7 @@ The repository is a collection of Kusto Query Language (KQL) queries used here a
     ├── README.md              - this readme file
     ├── azure-log-analytics    - Azure Log Analytics-related queries
         ├── data-factory       - Azure Data Factory-related queries
+        ├── logic-apps          - Azure Logic Apps-related queries
 
 # Useful Resources
 - [Microsoft's KQL overview](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/)
